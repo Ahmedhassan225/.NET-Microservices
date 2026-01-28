@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="CommandsService/CommandsService.csproj" />
+  <Project Path="AppHost/AppHost.csproj" />
+  <Project Path="ServiceDefaults/ServiceDefaults.csproj" />
+  <Project Path="PlatformService/PlatformService.csproj" />
+</Solution>

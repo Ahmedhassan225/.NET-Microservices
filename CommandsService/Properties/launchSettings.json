@@ -19,7 +19,7 @@
     },
     "CommandsService": {
       "commandName": "Project",
-      "dotnetRunMessages": "true",
+      "dotnetRunMessage": "true",
       "launchBrowser": true,
       "launchUrl": "swagger",
       "applicationUrl": "https://localhost:6001;http://localhost:6000",

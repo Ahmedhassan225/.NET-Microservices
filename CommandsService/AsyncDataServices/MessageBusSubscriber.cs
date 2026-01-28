@@ -30,24 +30,37 @@ namespace CommandsService.AsyncDataServices
 
         private void InitializeRabbitMQ()
         {
-            var factory = new ConnectionFactory() { HostName = _configuration["RabbitMQHost"], Port = int.Parse(_configuration["RabbitMQPort"])};
+            try
+            {
+                var factory = new ConnectionFactory() { HostName = _configuration["RabbitMQHost"], Port = int.Parse(_configuration["RabbitMQPort"])};
 
-            _connection = factory.CreateConnection();
-            _channel = _connection.CreateModel();
-            _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout);
-            _queueName = _channel.QueueDeclare().QueueName;
-            _channel.QueueBind(queue: _queueName,
-                exchange: "trigger",
-                routingKey: "");
+                _connection = factory.CreateConnection();
+                _channel = _connection.CreateModel();
+                _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout);
+                _queueName = _channel.QueueDeclare().QueueName;
+                _channel.QueueBind(queue: _queueName,
+                    exchange: "trigger",
+                    routingKey: "");
 
-            Console.WriteLine("--> Listenting on the Message Bus...");
+                Console.WriteLine("--> Listenting on the Message Bus...");
 
-            _connection.ConnectionShutdown += RabbitMQ_ConnectionShitdown;
+                _connection.ConnectionShutdown += RabbitMQ_ConnectionShitdown;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"--> Could not connect to the Message Bus: {ex.Message}");
+            }
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
             stoppingToken.ThrowIfCancellationRequested();
+
+            if (_channel == null)
+            {
+                Console.WriteLine("--> No channel available, Message Bus subscriber not active");
+                return Task.CompletedTask;
+            }
 
             var consumer = new EventingBasicConsumer(_channel);
 
@@ -73,13 +86,13 @@ namespace CommandsService.AsyncDataServices
 
         public override void Dispose()
         {
-            if(_channel.IsOpen)
+            if(_channel != null && _channel.IsOpen)
             {
                 _channel.Close();
                 _connection.Close();
             }
 
-            base.Dispose(); 
+            base.Dispose();
         }
     }
 }

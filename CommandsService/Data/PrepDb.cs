@@ -25,6 +25,12 @@ namespace CommandsService.Data
         {
             Console.WriteLine("Seeding new platforms...");
 
+            if (platforms == null)
+            {
+                Console.WriteLine("--> No platforms to seed");
+                return;
+            }
+
             foreach (var plat in platforms)
             {
                 if(!repo.ExternalPlatformExists(plat.ExternalID))
