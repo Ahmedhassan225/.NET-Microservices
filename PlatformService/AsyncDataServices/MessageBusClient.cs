@@ -1,34 +1,26 @@
-using System;
-using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using PlatformService.Dtos;
 using RabbitMQ.Client;
+using System;
+using System.Text;
+using System.Text.Json;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace PlatformService.AsyncDataServices
 {
     public class MessageBusClient : IMessageBusClient
     {
-        private readonly IConfiguration _configuration;
         private readonly IConnection _connection;
-        private readonly IModel _channel;
+        private readonly IChannel _channel;
 
-        public MessageBusClient(IConfiguration configuration)
+        public MessageBusClient(IConnection connection)
         {
-            _configuration = configuration;
-            var factory = new ConnectionFactory()
-            {
-                HostName = _configuration["RabbitMQHost"],
-                Port = int.Parse(_configuration["RabbitMQPort"])
-            };
+            _connection = connection;
             try
             {
-                _connection = factory.CreateConnection();
-                _channel = _connection.CreateModel();
+                _channel = _connection.CreateChannelAsync().GetAwaiter().GetResult();
 
-                _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout);
-
-                _connection.ConnectionShutdown += RabbitMQ_ConnectionShutdown;
+                _channel.ExchangeDeclareAsync(exchange: "trigger", type: ExchangeType.Fanout).GetAwaiter().GetResult();
 
                 Console.WriteLine("--> Connected to MessageBus");
 
@@ -50,18 +42,17 @@ namespace PlatformService.AsyncDataServices
             }
             else
             {
-                Console.WriteLine("--> RabbitMQ connectionis closed, not sending");
-            }   
+                Console.WriteLine("--> RabbitMQ connectionids closed, not sending");
+            }
         }
 
         private void SendMessage(string message)
         {
             var body = Encoding.UTF8.GetBytes(message);
 
-            _channel.BasicPublish(exchange: "trigger",
+            _channel.BasicPublishAsync(exchange: "trigger",
                             routingKey: "",
-                            basicProperties: null,
-                            body: body);
+                            body: body).GetAwaiter().GetResult();
             Console.WriteLine($"--> We have sent {message}");
         }
 
@@ -70,14 +61,9 @@ namespace PlatformService.AsyncDataServices
             Console.WriteLine("MessageBus Disposed");
             if (_channel.IsOpen)
             {
-                _channel.Close();
-                _connection.Close();
+                _channel.CloseAsync().GetAwaiter().GetResult();
+                _connection.CloseAsync().GetAwaiter().GetResult();
             }
-        }
-
-        private void RabbitMQ_ConnectionShutdown(object sender, ShutdownEventArgs e)
-        {
-            Console.WriteLine("--> RabbitMQ Connection Shutdown");
         }
     }
 }

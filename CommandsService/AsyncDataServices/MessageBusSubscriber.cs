@@ -12,17 +12,16 @@ namespace CommandsService.AsyncDataServices
 {
     public class MessageBusSubscriber : BackgroundService
     {
-        private readonly IConfiguration _configuration;
         private readonly IEventProcessor _eventProcessor;
-        private IConnection _connection;
-        private IModel _channel;
+        private readonly IConnection _connection;
+        private IChannel _channel;
         private string _queueName;
 
         public MessageBusSubscriber(
-            IConfiguration configuration, 
+            IConnection connection,
             IEventProcessor eventProcessor)
         {
-            _configuration = configuration;
+            _connection = connection;
             _eventProcessor = eventProcessor;
 
             InitializeRabbitMQ();
@@ -32,19 +31,15 @@ namespace CommandsService.AsyncDataServices
         {
             try
             {
-                var factory = new ConnectionFactory() { HostName = _configuration["RabbitMQHost"], Port = int.Parse(_configuration["RabbitMQPort"])};
-
-                _connection = factory.CreateConnection();
-                _channel = _connection.CreateModel();
-                _channel.ExchangeDeclare(exchange: "trigger", type: ExchangeType.Fanout);
-                _queueName = _channel.QueueDeclare().QueueName;
-                _channel.QueueBind(queue: _queueName,
+                _channel = _connection.CreateChannelAsync().GetAwaiter().GetResult();
+                _channel.ExchangeDeclareAsync(exchange: "trigger", type: ExchangeType.Fanout).GetAwaiter().GetResult();
+                var queueDeclareResult = _channel.QueueDeclareAsync().GetAwaiter().GetResult();
+                _queueName = queueDeclareResult.QueueName;
+                _channel.QueueBindAsync(queue: _queueName,
                     exchange: "trigger",
-                    routingKey: "");
+                    routingKey: "").GetAwaiter().GetResult();
 
                 Console.WriteLine("--> Listenting on the Message Bus...");
-
-                _connection.ConnectionShutdown += RabbitMQ_ConnectionShitdown;
             }
             catch (Exception ex)
             {
@@ -52,19 +47,19 @@ namespace CommandsService.AsyncDataServices
             }
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             stoppingToken.ThrowIfCancellationRequested();
 
             if (_channel == null)
             {
                 Console.WriteLine("--> No channel available, Message Bus subscriber not active");
-                return Task.CompletedTask;
+                return;
             }
 
-            var consumer = new EventingBasicConsumer(_channel);
+            var consumer = new AsyncEventingBasicConsumer(_channel);
 
-            consumer.Received += (ModuleHandle, ea) =>
+            consumer.ReceivedAsync += async (sender, ea) =>
             {
                 Console.WriteLine("--> Event Received!");
 
@@ -72,24 +67,18 @@ namespace CommandsService.AsyncDataServices
                 var notificationMessage = Encoding.UTF8.GetString(body.ToArray());
 
                 _eventProcessor.ProcessEvent(notificationMessage);
+                await Task.CompletedTask;
             };
 
-            _channel.BasicConsume(queue: _queueName, autoAck: true, consumer: consumer);
-
-            return Task.CompletedTask;
-        }
-
-        private void RabbitMQ_ConnectionShitdown(object sender, ShutdownEventArgs e)
-        {
-            Console.WriteLine("--> Connection Shutdown");
+            await _channel.BasicConsumeAsync(queue: _queueName, autoAck: true, consumer: consumer);
         }
 
         public override void Dispose()
         {
             if(_channel != null && _channel.IsOpen)
             {
-                _channel.Close();
-                _connection.Close();
+                _channel.CloseAsync().GetAwaiter().GetResult();
+                _connection.CloseAsync().GetAwaiter().GetResult();
             }
 
             base.Dispose();
