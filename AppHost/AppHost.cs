@@ -18,7 +18,7 @@ var platformService = builder.AddProject<Projects.PlatformService>("platformserv
 var commandsService = builder.AddProject<Projects.CommandsService>("commandsservice")
     .WithReference(rabbitmq)
     .WithReference(platformService)
-    .WithEnvironment("GrpcPlatform", platformService.GetEndpoint("http"))
+    .WithEnvironment("GrpcPlatform", platformService.GetEndpoint("https"))
     .WaitFor(platformService)
     .WaitFor(rabbitmq);
 
